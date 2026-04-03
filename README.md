@@ -37,6 +37,7 @@ Best-Price Tracking: The book maintains bestBid_ and bestAsk_ variables. While i
 ## Complexity Analysis
 
 | Operation | Complexity | Note |
+| -------- | -------- | -------- |
 | Add Order (Limit) | O(1) | Best case (no matching).
 | Add Order (Market) | O(N) | Where N is the number of price levels crossed.
 | Cancel Order | O(1) | Immediate lookup and lazy flag set.
