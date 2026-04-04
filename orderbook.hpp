@@ -24,6 +24,19 @@ static constexpr uint32_t INVALID_IDX = ~uint32_t(0);
 // 32 bytes → 2 slots per 64-byte cache line.
 
 struct OrderSlot {
+    OrderSlot() = default;
+
+    OrderSlot(OrderId oid, uint32_t px, Qty q, Side s, bool ac=true)
+    : id(oid)
+    , price(px)
+    , qty(q)
+    , initialQty(q)
+    , side(s)
+    , active(ac)
+    {
+
+    }
+
     OrderId  id         = 0;
     uint32_t next       = INVALID_IDX; // next pool index in price-level FIFO chain
     uint32_t price      = 0;           // raw scaled tick
@@ -52,22 +65,22 @@ struct OrderLookup {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  OrderBook<MaxPrice, PoolCap, ScaleFactor>
+//  OrderBook<MaxPrice, ScaleFactor, PoolCap>
 //
 //  Template parameters
 //  ───────────────────
 //  MaxPrice    – largest raw (scaled) price tick accepted.
 //                e.g. MaxPrice=200'000 with ScaleFactor=100 → max $2000.00
 //
+//  ScaleFactor – multiplier applied to a double price to produce a raw tick.
+//                e.g. ScaleFactor=100  → $99.50 becomes tick 9950
+//                     ScaleFactor=1000 → $99.500 becomes tick 99500
+//
 //  PoolCap     – compile-time capacity of the flat order pool.
 //                The pool is a std::array<OrderSlot, PoolCap> embedded inside
 //                the object; no heap allocation after construction.
 //                ⚠  Because bids_/asks_/pool_ are large, always heap-allocate
 //                   the OrderBook (std::make_unique<OrderBook<...>>()).
-//
-//  ScaleFactor – multiplier applied to a double price to produce a raw tick.
-//                e.g. ScaleFactor=100  → $99.50 becomes tick 9950
-//                     ScaleFactor=1000 → $99.500 becomes tick 99500
 //
 //  Nested types
 //  ────────────
@@ -77,7 +90,7 @@ struct OrderLookup {
 //  OrderBook::Trade  – execution report returned by addOrder().
 // ─────────────────────────────────────────────────────────────────────────────
 
-template<uint32_t MaxPrice, uint32_t PoolCap, uint32_t ScaleFactor=1'000>
+template<uint32_t MaxPrice, uint32_t ScaleFactor=1'000, uint32_t PoolCap=10'000>
 class OrderBook {
 public:
     // ── Price ─────────────────────────────────────────────────────────────────
@@ -143,7 +156,7 @@ public:
             }
             if (qty > 0) {
                 uint32_t idx = allocSlot();
-                pool_[idx] = {id, INVALID_IDX, price.raw, qty, qty, side, true, {}};
+                pool_[idx] = {id, price.raw, qty, side};
                 enqueue(bids_[price.raw], idx, qty);
                 lookup_[id] = {idx, price.raw, side};
                 if (price.raw > bestBid_) bestBid_ = price.raw;
@@ -155,7 +168,7 @@ public:
             }
             if (qty > 0) {
                 uint32_t idx = allocSlot();
-                pool_[idx] = {id, INVALID_IDX, price.raw, qty, qty, side, true, {}};
+                pool_[idx] = {id, price.raw, qty, side};
                 enqueue(asks_[price.raw], idx, qty);
                 lookup_[id] = {idx, price.raw, side};
                 if (price.raw < bestAsk_) bestAsk_ = price.raw;
@@ -230,7 +243,7 @@ public:
         return side == Side::Buy ? bids_[p.raw].totalQty : asks_[p.raw].totalQty;
     }
 
-    Qty  marketDepth(Side side, uint32_t depthLevels) const
+    Qty marketDepth(Side side, uint32_t depthLevels) const
     {
         Qty total = 0; uint32_t seen = 0;
         if (side == Side::Buy) {
