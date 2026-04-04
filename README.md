@@ -45,11 +45,35 @@ Best-Price Tracking: The book maintains bestBid_ and bestAsk_ variables. While i
 | Price/Qty Query | O(1) | Direct array access.
 
 ## To build and use
+To build, simply cmake . 
+Or to build with benchmark test, cmake . -DBUILD_TEST=1
+then make
+
 Header only, just included by:
 ```cpp
 #include "orderbook.hpp"
 ```
 and link with the target orderbook
+
+## Usage
+
+```cpp
+// Initialize book with max price 10,000
+OrderBook book(10000);
+
+// Add a Buy Order (Aggressor)
+auto trades = book.addOrder(101, Side::Buy, 500, 10);
+
+// The trades vector contains execution details if the order matched
+for (const auto& trade : trades) {
+    std::cout << "Matched " << trade.qty << " @ " << trade.price << std::endl;
+}
+
+// Check Top of Book
+if (auto bid = book.bestBid()) {
+    std::cout << "Best Bid: " << *bid << std::endl;
+}
+```
 
 ## Benchmark
 Performed in MacBook Pro M4
