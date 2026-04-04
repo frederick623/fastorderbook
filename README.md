@@ -1,6 +1,5 @@
 # fastorderbook
-High performance orderbook achieving nanosecond magnitude of latency and low variance
-
+High performance orderbook achieving nanosecond magnitude and low variance of latency
 Implementation loosely reference from https://www.youtube.com/watch?v=8uAW5FQtcvE and https://www.youtube.com/watch?v=sX2nF1fW7kI&t=3036s
 
 This implementation of an OrderBook is designed for high-performance trading applications, specifically focusing on memory locality, zero-heap allocation during order matching, and cache efficiency.
