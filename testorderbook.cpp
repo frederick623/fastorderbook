@@ -9,7 +9,7 @@
 //  ScaleFactor=100 → prices in whole cents  ($99.50 → tick 9950)
 // ─────────────────────────────────────────────────────────────────────────────
 
-using Book  = OrderBook<200'000, 100, 500'000>;
+using Book  = OrderBook<2'000, 100, 500'000>;
 using Price = Book::Price;
 using Trade = Book::Trade;
 

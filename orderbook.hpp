@@ -70,7 +70,7 @@ struct OrderLookup {
 //  Template parameters
 //  ───────────────────
 //  MaxPrice    – largest raw (scaled) price tick accepted.
-//                e.g. MaxPrice=200'000 with ScaleFactor=100 → max $2000.00
+//                e.g. MaxPrice $2'000.00 with ScaleFactor=100 → MaxPriceTick = 200'000
 //
 //  ScaleFactor – multiplier applied to a double price to produce a raw tick.
 //                e.g. ScaleFactor=100  → $99.50 becomes tick 9950
@@ -90,9 +90,10 @@ struct OrderLookup {
 //  OrderBook::Trade  – execution report returned by addOrder().
 // ─────────────────────────────────────────────────────────────────────────────
 
-template<uint32_t MaxPrice, uint32_t ScaleFactor=1'000, uint32_t PoolCap=10'000>
+template<uint32_t MaxPrice, uint32_t ScaleFactor, uint32_t PoolCap=1'000'000>
 class OrderBook {
 public:
+    constexpr static uint32_t MaxPriceTick = MaxPrice*ScaleFactor;
     // ── Price ─────────────────────────────────────────────────────────────────
     //
     //  Wraps a double price into a scaled uint32_t tick.
@@ -136,14 +137,14 @@ public:
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    OrderBook() : bestBid_(0), bestAsk_(MaxPrice + 1) {}
+    OrderBook() : bestBid_(0), bestAsk_(MaxPriceTick + 1) {}
 
     // ── Core API ──────────────────────────────────────────────────────────────
 
     std::vector<Trade> addOrder(OrderId id, Side side, Price price, Qty qty)
     {
-        if (price.raw > MaxPrice)    throw std::out_of_range(
-            "Price tick " + std::to_string(price.raw) + " exceeds MaxPrice " + std::to_string(MaxPrice));
+        if (price.raw > MaxPriceTick)    throw std::out_of_range(
+            "Price tick " + std::to_string(price.raw) + " exceeds MaxPriceTick " + std::to_string(MaxPriceTick));
         if (qty == 0)          throw std::invalid_argument("qty must be > 0");
         if (lookup_.count(id)) throw std::invalid_argument("duplicate order id");
 
@@ -224,22 +225,22 @@ public:
             ? std::optional<Price>(Price::fromTick(bestBid_)) : std::nullopt;
     }
     std::optional<Price> bestAsk() const {
-        return bestAsk_ <= MaxPrice
+        return bestAsk_ <= MaxPriceTick
             ? std::optional<Price>(Price::fromTick(bestAsk_)) : std::nullopt;
     }
     std::optional<Price> midPrice() const {
-        if (bestBid_ > 0 && bestAsk_ <= MaxPrice)
+        if (bestBid_ > 0 && bestAsk_ <= MaxPriceTick)
             return Price::fromTick((bestBid_ + bestAsk_) / 2);
         return std::nullopt;
     }
     std::optional<Price> spread() const {
-        if (bestBid_ > 0 && bestAsk_ <= MaxPrice)
+        if (bestBid_ > 0 && bestAsk_ <= MaxPriceTick)
             return Price::fromTick(bestAsk_ - bestBid_);
         return std::nullopt;
     }
 
     Qty qtyAtPrice(Side side, Price p) const {
-        if (p.raw > MaxPrice) return 0;
+        if (p.raw > MaxPriceTick) return 0;
         return side == Side::Buy ? bids_[p.raw].totalQty : asks_[p.raw].totalQty;
     }
 
@@ -250,7 +251,7 @@ public:
             for (uint32_t p = bestBid_; p > 0 && seen < depthLevels; --p)
                 if (bids_[p].totalQty > 0) { total += bids_[p].totalQty; ++seen; }
         } else {
-            for (uint32_t p = bestAsk_; p <= MaxPrice && seen < depthLevels; ++p)
+            for (uint32_t p = bestAsk_; p <= MaxPriceTick && seen < depthLevels; ++p)
                 if (asks_[p].totalQty > 0) { total += asks_[p].totalQty; ++seen; }
         }
         return total;
@@ -264,13 +265,13 @@ public:
 
     // Static metadata
     static constexpr uint32_t scaleFactor() { return ScaleFactor; }
-    static constexpr uint32_t maxPrice()    { return MaxPrice; }
+    static constexpr uint32_t maxPriceTick(){ return MaxPriceTick; }
     static constexpr uint32_t poolCap()     { return PoolCap; }
 
 private:
     // ── The spine: two flat arrays indexed by raw price tick ──────────────────
-    std::array<PriceLevel, MaxPrice + 1> bids_;
-    std::array<PriceLevel, MaxPrice + 1> asks_;
+    std::array<PriceLevel, MaxPriceTick + 1> bids_;
+    std::array<PriceLevel, MaxPriceTick + 1> asks_;
 
     // ── The flat order pool: all orders in one contiguous buffer ──────────────
     std::array<OrderSlot, PoolCap>       pool_;
@@ -280,7 +281,7 @@ private:
 
     std::unordered_map<OrderId, OrderLookup> lookup_;
     uint32_t bestBid_;  // raw tick, 0 = no bid
-    uint32_t bestAsk_;  // raw tick, MaxPrice+1 = no ask
+    uint32_t bestAsk_;  // raw tick, MaxPriceTick+1 = no ask
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
@@ -355,8 +356,8 @@ private:
     }
     void updateBestAsk(uint32_t from)
     {
-        for (uint32_t p = from; p <= MaxPrice; ++p)
+        for (uint32_t p = from; p <= MaxPriceTick; ++p)
             if (asks_[p].totalQty > 0) { bestAsk_ = p; return; }
-        bestAsk_ = MaxPrice + 1;
+        bestAsk_ = MaxPriceTick + 1;
     }
 };
