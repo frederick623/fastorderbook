@@ -46,7 +46,8 @@ Best-Price Tracking: The book maintains bestBid_ and bestAsk_ variables. While i
 
 ## To build and use
 To build, simply 
-```cmake .
+```
+cmake .
 ```
 Or to build with benchmark test, 
 ```
