@@ -45,9 +45,17 @@ Best-Price Tracking: The book maintains bestBid_ and bestAsk_ variables. While i
 | Price/Qty Query | O(1) | Direct array access.
 
 ## To build and use
-To build, simply cmake . 
-Or to build with benchmark test, cmake . -DBUILD_TEST=1
-then make
+To build, simply 
+```cmake .
+```
+Or to build with benchmark test, 
+```
+cmake . -DBUILD_TEST=1
+```
+then 
+```
+make
+```
 
 Header only, just included by:
 ```cpp
