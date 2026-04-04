@@ -5,9 +5,6 @@ Implementation loosely reference from https://www.youtube.com/watch?v=8uAW5FQtcv
 
 This implementation of an OrderBook is designed for high-performance trading applications, specifically focusing on memory locality, zero-heap allocation during order matching, and cache efficiency.
 
-Here is a breakdown of the technical implementation you can include in your README.md.
-
-Technical Overview: High-Performance Order Book
 ## Memory Management: The Flat Pool
 
 Unlike traditional order books that use std::list or raw pointers (which cause memory fragmentation and cache misses), this implementation uses a Flat Memory Pool.
