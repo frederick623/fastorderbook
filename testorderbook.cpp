@@ -1,59 +1,76 @@
-#include "orderbook.hpp"
-
-#include <chrono>
-#include <iostream>
-#include <random>
-#include <cassert>
-#include <numeric>
-
 #include <benchmark/benchmark.h>
+#include "orderbook.hpp"
+#include <random>
+#include <cmath>
+#include <memory>
 
-static constexpr Price MID   = 50'000;
-static constexpr Price RANGE = 200;
+// ─────────────────────────────────────────────────────────────────────────────
+//  Instantiate the book once so the type alias is readable everywhere.
+//  ScaleFactor=100 → prices in whole cents  ($99.50 → tick 9950)
+// ─────────────────────────────────────────────────────────────────────────────
 
-struct TestOrders {
+using Book  = OrderBook<200'000, 500'000, 100>;
+using Price = Book::Price;
+using Trade = Book::Trade;
+
+static constexpr double MID   = 500.00;   // $500.00
+static constexpr double RANGE =   2.00;   // ±$2.00 = ±200 ticks
+
+// Snap a double to the nearest cent (avoids rounding noise in Price ctor)
+static inline double snapCent(double p) {
+    return std::round(p * 100.0) / 100.0;
+}
+
+// Pre-generated test vectors (built once per process)
+struct TestData {
     std::vector<OrderId> ids;
     std::vector<Side>    sides;
     std::vector<Price>   prices;
     std::vector<Qty>     qtys;
 
-    TestOrders(int n, uint32_t seed = 42) {
+    TestData(int n, uint32_t seed = 42) {
         std::mt19937 rng(seed);
-        std::uniform_int_distribution<Price> pDist(MID - RANGE, MID + RANGE);
-        std::uniform_int_distribution<Qty>   qDist(1, 100);
-        std::uniform_int_distribution<int>   sDist(0, 1);
+        std::uniform_real_distribution<double> pDist(MID - RANGE, MID + RANGE);
+        std::uniform_int_distribution<Qty>     qDist(1, 100);
+        std::uniform_int_distribution<int>     sDist(0, 1);
         ids.resize(n); sides.resize(n); prices.resize(n); qtys.resize(n);
         for (int i = 0; i < n; ++i) {
             ids[i]    = i + 1;
             sides[i]  = sDist(rng) ? Side::Buy : Side::Sell;
-            prices[i] = pDist(rng);
+            prices[i] = Price(snapCent(pDist(rng)));
             qtys[i]   = qDist(rng);
         }
     }
 };
 
-// Coefficient of variation statistic for ComputeStatistics
+static const TestData& testData(int n) {
+    static std::unordered_map<int, TestData> cache;
+    auto it = cache.find(n);
+    if (it == cache.end()) it = cache.emplace(n, TestData(n)).first;
+    return it->second;
+}
 
 // ── BM_AddOrder: mixed add + matching (realistic) ────────────────────────────
 
 static void BM_AddOrder(benchmark::State& state)
 {
-    const int N = static_cast<int>(state.range(0));
-    TestOrders d(N);
+    const int N  = static_cast<int>(state.range(0));
+    const auto& d = testData(N);
 
     for (auto _ : state) {
         state.PauseTiming();
-        OrderBook ob(200'000);
+        auto ob = std::make_unique<Book>();
+        // Seed some resting liquidity so matching occurs
         for (int i = 0; i < std::min(N / 10, 500); ++i) {
             Side  s = (i % 2 == 0) ? Side::Buy : Side::Sell;
-            Price p = (s == Side::Buy) ? MID - 20 : MID + 20;
-            ob.addOrder(2'000'000 + i, s, p, 50);
+            Price p = Price((s == Side::Buy) ? MID - 0.20 : MID + 0.20);
+            ob->addOrder(2'000'000 + i, s, p, 50);
         }
         state.ResumeTiming();
 
         for (int i = 0; i < N; ++i)
             benchmark::DoNotOptimize(
-                ob.addOrder(d.ids[i], d.sides[i], d.prices[i], d.qtys[i]));
+                ob->addOrder(d.ids[i], d.sides[i], d.prices[i], d.qtys[i]));
     }
     state.SetItemsProcessed(state.iterations() * N);
 }
@@ -68,6 +85,8 @@ BENCHMARK(BM_AddOrder)
 static void BM_AddOrder_NoMatch(benchmark::State& state)
 {
     const int N = static_cast<int>(state.range(0));
+
+    // Bids far below mid, asks far above → guaranteed no match
     std::vector<std::tuple<OrderId,Side,Price,Qty>> orders;
     orders.reserve(N);
     {
@@ -75,19 +94,19 @@ static void BM_AddOrder_NoMatch(benchmark::State& state)
         std::uniform_int_distribution<Qty> qDist(1, 50);
         for (int i = 0; i < N; ++i) {
             Side  s = (i % 2 == 0) ? Side::Buy : Side::Sell;
-            Price p = (s == Side::Buy) ? MID - 2000 - (i % 500)
-                                       : MID + 2000 + (i % 500);
+            Price p = Price((s == Side::Buy) ? MID - 20.0 - (i % 100) * 0.01
+                                             : MID + 20.0 + (i % 100) * 0.01);
             orders.emplace_back(i + 1, s, p, qDist(rng));
         }
     }
 
     for (auto _ : state) {
         state.PauseTiming();
-        OrderBook ob(200'000);
+        auto ob = std::make_unique<Book>();
         state.ResumeTiming();
 
         for (auto& [id, s, p, q] : orders)
-            benchmark::DoNotOptimize(ob.addOrder(id, s, p, q));
+            benchmark::DoNotOptimize(ob->addOrder(id, s, p, q));
     }
     state.SetItemsProcessed(state.iterations() * N);
 }
@@ -105,19 +124,19 @@ static void BM_CancelOrder(benchmark::State& state)
 
     for (auto _ : state) {
         state.PauseTiming();
-        OrderBook ob(200'000);
+        auto ob = std::make_unique<Book>();
         std::vector<OrderId> ids(N);
         for (int i = 0; i < N; ++i) {
             Side  s = (i % 2 == 0) ? Side::Buy : Side::Sell;
-            Price p = (s == Side::Buy) ? MID - 20 : MID + 20;
-            ob.addOrder(i + 1, s, p, 10);
+            Price p = Price((s == Side::Buy) ? MID - 0.20 : MID + 0.20);
+            ob->addOrder(i + 1, s, p, 10);
             ids[i] = i + 1;
         }
         std::shuffle(ids.begin(), ids.end(), std::mt19937(13));
         state.ResumeTiming();
 
         for (OrderId id : ids)
-            benchmark::DoNotOptimize(ob.cancelOrder(id));
+            benchmark::DoNotOptimize(ob->cancelOrder(id));
     }
     state.SetItemsProcessed(state.iterations() * N);
 }
@@ -135,13 +154,15 @@ static void BM_MarketSweep(benchmark::State& state)
 
     for (auto _ : state) {
         state.PauseTiming();
-        OrderBook ob(200'000);
+        auto ob = std::make_unique<Book>();
+        // Place N sell levels 1 cent apart starting at MID+0.01
         for (int i = 0; i < N; ++i)
-            ob.addOrder(i + 1, Side::Sell, MID + 1 + i, 1);
+            ob->addOrder(i + 1, Side::Sell, Price(MID + 0.01 * (i + 1)), 1);
         state.ResumeTiming();
 
+        // One buy sweeps all N levels
         benchmark::DoNotOptimize(
-            ob.addOrder(999'999, Side::Buy, MID + N + 1, (Qty)N));
+            ob->addOrder(999'999, Side::Buy, Price(MID + 0.01 * (N + 1)), (Qty)N));
     }
     state.SetItemsProcessed(state.iterations() * N);
 }
@@ -151,17 +172,17 @@ BENCHMARK(BM_MarketSweep)
     ->Repetitions(5)
     ->DisplayAggregatesOnly(true);
 
-// ── BM_BestBidAsk: hot-path query ────────────────────────────────────────────
+// ── BM_BestBidAsk: hot-path integer load ─────────────────────────────────────
 
 static void BM_BestBidAsk(benchmark::State& state)
 {
-    OrderBook ob(200'000);
-    ob.addOrder(1, Side::Buy,  MID - 10, 100);
-    ob.addOrder(2, Side::Sell, MID + 10, 100);
+    auto ob = std::make_unique<Book>();
+    ob->addOrder(1, Side::Buy,  Price(MID - 0.10), 100);
+    ob->addOrder(2, Side::Sell, Price(MID + 0.10), 100);
 
     for (auto _ : state) {
-        benchmark::DoNotOptimize(ob.bestBid());
-        benchmark::DoNotOptimize(ob.bestAsk());
+        benchmark::DoNotOptimize(ob->bestBid());
+        benchmark::DoNotOptimize(ob->bestAsk());
     }
 }
 BENCHMARK(BM_BestBidAsk)

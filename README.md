@@ -7,7 +7,7 @@ This implementation of an OrderBook is designed for high-performance trading app
 
 Unlike traditional order books that use std::list or raw pointers (which cause memory fragmentation and cache misses), this implementation uses a Flat Memory Pool.
 
-Contiguous Storage: All orders are stored in a pre-allocated std::vector<OrderSlot>.
+Contiguous Storage: All orders are stored in a pre-allocated std::array<OrderSlot, PoolCap>.
 
 Index-Based Linking: Instead of 64-bit pointers, the book uses uint32_t indices to link orders. This reduces the memory footprint and ensures the OrderSlot struct is exactly 32 bytes.
 
@@ -15,7 +15,7 @@ Cache Friendliness: By keeping slots at 32 bytes, exactly two orders fit perfect
 
 ## Data Structures
 
-Price-Level Array: The book uses a "Direct Map" approach for price levels (std::vector<PriceLevel>). This allows for O(1) access to any price point without searching a tree.
+Price-Level Array: The book uses a "Direct Map" approach for price levels (std::array<PriceLevel, MaxPrice + 1>). This allows for O(1) access to any price point without searching a tree.
 
 Singly-Linked FIFO: Each price level maintains a head and tail index. New orders are appended to the tail, and matching occurs at the head, ensuring strict Time Priority.
 
@@ -85,24 +85,24 @@ Performed in MacBook Pro M4
 -----------------------------------------------------------------------------------------------------
 Benchmark                                           Time             CPU   Iterations UserCounters...
 -----------------------------------------------------------------------------------------------------
-BM_AddOrder/10000/repeats:5_mean              3535346 ns      3535260 ns            5 items_per_second=2.82868M/s
-BM_AddOrder/10000/repeats:5_median            3542737 ns      3542642 ns            5 items_per_second=2.82275M/s
-BM_AddOrder/10000/repeats:5_stddev              13005 ns        13001 ns            5 items_per_second=10.416k/s
-BM_AddOrder/10000/repeats:5_cv                   0.37 %          0.37 %             5 items_per_second=0.37%
-BM_AddOrder_NoMatch/10000/repeats:5_mean      2622158 ns      2622082 ns            5 items_per_second=3.81385M/s
-BM_AddOrder_NoMatch/10000/repeats:5_median    2626655 ns      2626616 ns            5 items_per_second=3.80718M/s
-BM_AddOrder_NoMatch/10000/repeats:5_stddev      13629 ns        13608 ns            5 items_per_second=19.8195k/s
-BM_AddOrder_NoMatch/10000/repeats:5_cv           0.52 %          0.52 %             5 items_per_second=0.52%
-BM_CancelOrder/10000/repeats:5_mean           2143338 ns      2143276 ns            5 items_per_second=4.66584M/s
-BM_CancelOrder/10000/repeats:5_median         2143954 ns      2143919 ns            5 items_per_second=4.66436M/s
-BM_CancelOrder/10000/repeats:5_stddev           10159 ns        10103 ns            5 items_per_second=21.9875k/s
-BM_CancelOrder/10000/repeats:5_cv                0.47 %          0.47 %             5 items_per_second=0.47%
-BM_MarketSweep/500/repeats:5_mean              995350 ns       995251 ns            5 items_per_second=502.387k/s
-BM_MarketSweep/500/repeats:5_median            994898 ns       994883 ns            5 items_per_second=502.571k/s
-BM_MarketSweep/500/repeats:5_stddev              2069 ns         2046 ns            5 items_per_second=1.03092k/s
-BM_MarketSweep/500/repeats:5_cv                  0.21 %          0.21 %             5 items_per_second=0.21%
-BM_BestBidAsk/repeats:5_mean                     17.7 ns         17.7 ns            5
-BM_BestBidAsk/repeats:5_median                   17.7 ns         17.7 ns            5
-BM_BestBidAsk/repeats:5_stddev                  0.054 ns        0.054 ns            5
-BM_BestBidAsk/repeats:5_cv                       0.31 %          0.31 %             5
+BM_AddOrder/10000/repeats:5_mean              2770192 ns      2769969 ns            5 items_per_second=3.61025M/s
+BM_AddOrder/10000/repeats:5_median            2764139 ns      2763907 ns            5 items_per_second=3.61807M/s
+BM_AddOrder/10000/repeats:5_stddev              16015 ns        16185 ns            5 items_per_second=21.0824k/s
+BM_AddOrder/10000/repeats:5_cv                   0.58 %          0.58 %             5 items_per_second=0.58%
+BM_AddOrder_NoMatch/10000/repeats:5_mean      1728933 ns      1728148 ns            5 items_per_second=5.78665M/s
+BM_AddOrder_NoMatch/10000/repeats:5_median    1729952 ns      1729841 ns            5 items_per_second=5.78088M/s
+BM_AddOrder_NoMatch/10000/repeats:5_stddev       7866 ns         8420 ns            5 items_per_second=28.2777k/s
+BM_AddOrder_NoMatch/10000/repeats:5_cv           0.45 %          0.49 %             5 items_per_second=0.49%
+BM_CancelOrder/10000/repeats:5_mean           1381254 ns      1380339 ns            5 items_per_second=7.24518M/s
+BM_CancelOrder/10000/repeats:5_median         1381466 ns      1380732 ns            5 items_per_second=7.24253M/s
+BM_CancelOrder/10000/repeats:5_stddev           12866 ns        13732 ns            5 items_per_second=72.544k/s
+BM_CancelOrder/10000/repeats:5_cv                0.93 %          0.99 %             5 items_per_second=1.00%
+BM_MarketSweep/500/repeats:5_mean              227088 ns       226839 ns            5 items_per_second=2.20429M/s
+BM_MarketSweep/500/repeats:5_median            226772 ns       226746 ns            5 items_per_second=2.20511M/s
+BM_MarketSweep/500/repeats:5_stddev              1689 ns         1567 ns            5 items_per_second=15.1398k/s
+BM_MarketSweep/500/repeats:5_cv                  0.74 %          0.69 %             5 items_per_second=0.69%
+BM_BestBidAsk/repeats:5_mean                     23.4 ns         23.4 ns            5
+BM_BestBidAsk/repeats:5_median                   23.4 ns         23.4 ns            5
+BM_BestBidAsk/repeats:5_stddev                  0.077 ns        0.078 ns            5
+BM_BestBidAsk/repeats:5_cv                       0.33 %          0.33 %             5
 ```
