@@ -167,7 +167,7 @@ static void BM_MarketSweep(benchmark::State& state)
     state.SetItemsProcessed(state.iterations() * N);
 }
 BENCHMARK(BM_MarketSweep)
-    ->Arg(500)
+    ->Arg(100)
     ->Unit(benchmark::kNanosecond)
     ->Repetitions(5)
     ->DisplayAggregatesOnly(true);
