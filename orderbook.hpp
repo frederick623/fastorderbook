@@ -96,6 +96,7 @@ template<uint32_t MaxPrice, uint32_t ScaleFactor, uint32_t PoolCap=1'000'000>
 class OrderBook {
 public:
     constexpr static PTick MaxPriceTick = MaxPrice*ScaleFactor;
+    static_assert(MaxPriceTick<UINT32_MAX);
     // ── Price ─────────────────────────────────────────────────────────────────
     //
     //  Wraps a double price into a scaled uint32_t tick.
