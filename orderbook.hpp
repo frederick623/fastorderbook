@@ -1,9 +1,6 @@
 #pragma once
 
-#include <algorithm>
 #include <array>
-#include <compare>
-#include <concepts>
 #include <vector>
 #include <unordered_map>
 #include <optional>
@@ -12,54 +9,17 @@
 #include <cmath>
 #include <iostream>
 #include <iomanip>
-
-template <std::unsigned_integral T>
-struct NamedType
-{
-    constexpr explicit NamedType(const T& v) : value(v) {}
-    constexpr auto operator<=>(const NamedType& o) const = default;
-    constexpr NamedType& operator+=(const NamedType& o) { 
-        value += o.value; 
-        return *this; 
-    }
-    constexpr NamedType& operator-=(const NamedType& o) { 
-        value -= o.value; 
-        return *this; 
-    }
-    constexpr NamedType& operator++() {
-        ++value;
-        return *this;
-    }
-    constexpr NamedType operator++(int) {
-        NamedType temp = *this;
-        ++value;
-        return temp;
-    }
-    constexpr NamedType& operator--() {
-        --value;
-        return *this;
-    }
-    constexpr NamedType operator--(int) {
-        NamedType temp = *this;
-        --value;
-        return temp;
-    }
-    constexpr explicit operator bool() const {
-        return value > 0;
-    }
-
-    T value;
-};
+#include <algorithm>
 
 // ── Non-template globals ──────────────────────────────────────────────────────
 
 using OrderId = uint64_t;
-using PTick   = NamedType<uint32_t>;
-using Qty     = NamedType<uint32_t>;
-using Idx     = NamedType<uint32_t>;
+using PTick   = uint32_t;
+using Qty     = uint32_t;
+using Idx     = uint32_t;
 enum class Side : uint8_t { Buy, Sell };
 
-static constexpr Idx INVALID_IDX = Idx(~uint32_t(0));
+static constexpr Idx INVALID_IDX = ~uint32_t(0);
 
 // ── OrderSlot: one node in the flat pool array ────────────────────────────────
 // price field stores the raw (scaled) integer tick.
@@ -79,23 +39,23 @@ struct OrderSlot {
 
     }
 
-    OrderId  id{0};
-    Idx      next{INVALID_IDX}; // next pool index in price-level FIFO chain
-    PTick    price{0};           // raw scaled tick
-    Qty      qty{0};
-    Qty      initialQty{0};
-    Side     side{Side::Buy};
-    bool     active{false};       // false = lazily deleted
-    uint8_t  _pad[6] = {};
+    OrderId  id         = 0;
+    Idx      next       = INVALID_IDX; // next pool index in price-level FIFO chain
+    PTick    price      = 0;           // raw scaled tick
+    Qty      qty        = 0;
+    Qty      initialQty = 0;
+    Side     side       = Side::Buy;
+    bool     active     = false;       // false = lazily deleted
+    uint8_t  _pad[6]    = {};
 };
 static_assert(sizeof(OrderSlot) == 32, "OrderSlot must be 32 bytes");
 
 // ── PriceLevel: FIFO chain of pool indices ────────────────────────────────────
 
 struct PriceLevel {
-    Idx head{INVALID_IDX};
-    Idx tail{INVALID_IDX};
-    Qty totalQty{0};
+    Idx head     = INVALID_IDX;
+    Idx tail     = INVALID_IDX;
+    Qty totalQty = 0;
 };
 
 // ── OrderLookup: payload stored per order in the hash map ─────────────────────
@@ -135,14 +95,11 @@ struct OrderLookup {
 template<uint32_t MaxPrice, uint32_t ScaleFactor, uint32_t PoolCap=1'000'000>
 class OrderBook {
 public:
-    constexpr static PTick ZeroTick = PTick(0);
-    constexpr static PTick MaxPriceTick = PTick(MaxPrice*ScaleFactor);
-    static_assert(MaxPriceTick.value<UINT32_MAX); // prevent MaxPriceTick overflow
-
+    constexpr static PTick MaxPriceTick = MaxPrice*ScaleFactor;
     // ── Price ─────────────────────────────────────────────────────────────────
     //
     //  Wraps a double price into a scaled uint32_t tick.
-    //  The raw tick is what the spine array and pool index on.
+    //  The raw tick is what the spine vectors and pool index on.
     //
     //  Usage:
     //    Price p(99.50);          // ctor from double
@@ -163,6 +120,7 @@ public:
             p.raw = tick;
             return p; 
         }
+
         inline double value() const { return static_cast<double>(raw) / ScaleFactor; }
         inline PTick tick()  const { return raw; }
 
@@ -172,7 +130,7 @@ public:
         }
 
     private:
-        PTick raw{0};
+        PTick raw = 0;
     };
 
     // ── Trade ─────────────────────────────────────────────────────────────────
@@ -186,50 +144,46 @@ public:
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    OrderBook() : bestBid_(0), bestAsk_(MaxPriceTick.value+1) {}
+    OrderBook() : bestBid_(0), bestAsk_(MaxPriceTick + 1) {}
 
     // ── Core API ──────────────────────────────────────────────────────────────
 
-    inline std::vector<Trade> addOrder(OrderId id, Side side, double price, uint32_t qty)
+    std::vector<Trade> addOrder(OrderId id, Side side, double price, Qty qty)
     {
-        return addOrder(id, side, Price(price), Qty(qty));
-    }
-
-    inline std::vector<Trade> addOrder(OrderId id, Side side, Price price, uint32_t qty)
-    {
-        return addOrder(id, side, price, Qty(qty));
+        return addOrder(id, side, Price(price), qty);
     }
 
     std::vector<Trade> addOrder(OrderId id, Side side, Price price, Qty qty)
     {
         if (price.tick() > MaxPriceTick)    throw std::out_of_range(
-            "Price tick " + std::to_string(price.tick().value) + " exceeds MaxPriceTick " + std::to_string(MaxPriceTick.value));
+            "Price tick " + std::to_string(price.tick()) + " exceeds MaxPriceTick " + std::to_string(MaxPriceTick));
+        if (qty == 0)          throw std::invalid_argument("qty must be > 0");
         if (lookup_.count(id)) throw std::invalid_argument("duplicate order id");
 
         std::vector<Trade> trades;
 
         if (side == Side::Buy) {
-            while (qty && bestAsk_ <= price.tick()) {
-                fillHead(asks_[bestAsk_.value], qty, id, bestAsk_, trades);
-                if (!asks_[bestAsk_.value].totalQty) updateBestAsk(bestAsk_);
+            while (qty > 0 && bestAsk_ <= price.tick()) {
+                fillHead(asks_[bestAsk_], qty, id, bestAsk_, trades);
+                if (asks_[bestAsk_].totalQty == 0) updateBestAsk(bestAsk_);
             }
-            if (qty) {
+            if (qty > 0) {
                 auto idx = allocSlot();
-                pool_[idx.value] = {id, price.tick(), qty, side};
-                enqueue(bids_[price.tick().value], idx, qty);
-                lookup_.try_emplace(id, OrderLookup{idx, price.tick(), side});
+                pool_[idx] = {id, price.tick(), qty, side};
+                enqueue(bids_[price.tick()], idx, qty);
+                lookup_[id] = {idx, price.tick(), side};
                 if (price.tick() > bestBid_) bestBid_ = price.tick();
             }
         } else {
-            while (qty && bestBid_ >= price.tick() && bestBid_ > PTick(0)) {
-                fillHead(bids_[bestBid_.value], qty, id, bestBid_, trades);
-                if (!bids_[bestBid_.value].totalQty) updateBestBid(bestBid_);
+            while (qty > 0 && bestBid_ >= price.tick() && bestBid_ > 0) {
+                fillHead(bids_[bestBid_], qty, id, bestBid_, trades);
+                if (bids_[bestBid_].totalQty == 0) updateBestBid(bestBid_);
             }
-            if (qty) {
+            if (qty > 0) {
                 auto idx = allocSlot();
-                pool_[idx.value] = {id, price.tick(), qty, side};
-                enqueue(asks_[price.tick().value], idx, qty);
-                lookup_.try_emplace(id, OrderLookup{idx, price.tick(), side});
+                pool_[idx] = {id, price.tick(), qty, side};
+                enqueue(asks_[price.tick()], idx, qty);
+                lookup_[id] = {idx, price.tick(), side};
                 if (price.tick() < bestAsk_) bestAsk_ = price.tick();
             }
         }
@@ -243,15 +197,15 @@ public:
         if (it == lookup_.end()) return false;
 
         const OrderLookup& ol   = it->second;
-        OrderSlot&         slot = pool_[ol.poolIdx.value];
+        OrderSlot&         slot = pool_[ol.poolIdx];
 
         if (ol.side == Side::Buy) {
-            bids_[ol.rawPrice.value].totalQty -= slot.qty;
-            if (!bids_[ol.rawPrice.value].totalQty && ol.rawPrice == bestBid_)
+            bids_[ol.rawPrice].totalQty -= slot.qty;
+            if (bids_[ol.rawPrice].totalQty == 0 && ol.rawPrice == bestBid_)
                 updateBestBid(ol.rawPrice);
         } else {
-            asks_[ol.rawPrice.value].totalQty -= slot.qty;
-            if (!asks_[ol.rawPrice.value].totalQty && ol.rawPrice == bestAsk_)
+            asks_[ol.rawPrice].totalQty -= slot.qty;
+            if (asks_[ol.rawPrice].totalQty == 0 && ol.rawPrice == bestAsk_)
                 updateBestAsk(ol.rawPrice);
         }
 
@@ -279,7 +233,7 @@ public:
     // ── Queries ───────────────────────────────────────────────────────────────
 
     std::optional<Price> bestBid() const {
-        return bestBid_ > ZeroTick
+        return bestBid_ > 0
             ? std::optional<Price>(Price::fromTick(bestBid_)) : std::nullopt;
     }
     std::optional<Price> bestAsk() const {
@@ -298,19 +252,19 @@ public:
     }
 
     Qty qtyAtPrice(Side side, Price p) const {
-        if (p.tick() > MaxPriceTick) return Qty(0);
+        if (p.tick() > MaxPriceTick) return 0;
         return side == Side::Buy ? bids_[p.tick()].totalQty : asks_[p.tick()].totalQty;
     }
 
     Qty marketDepth(Side side, PTick depthLevels) const
     {
-        Qty total{0}; PTick seen {0};
+        Qty total = 0; PTick seen = 0;
         if (side == Side::Buy) {
-            for (PTick p = bestBid_; p > ZeroTick && seen < depthLevels; --p)
-                if (bids_[p].totalqty) { total += bids_[p].totalQty; ++seen; }
+            for (PTick p = bestBid_; p > 0 && seen < depthLevels; --p)
+                if (bids_[p].totalQty > 0) { total += bids_[p].totalQty; ++seen; }
         } else {
             for (PTick p = bestAsk_; p <= MaxPriceTick && seen < depthLevels; ++p)
-                if (asks_[p].totalqty) { total += asks_[p].totalQty; ++seen; }
+                if (asks_[p].totalQty > 0) { total += asks_[p].totalQty; ++seen; }
         }
         return total;
     }
@@ -319,7 +273,7 @@ public:
 
     // Pool diagnostics
     Idx poolUsed()     const { return poolHwm_ - freeCount_; }
-    uint32_t poolCapacity() const { return PoolCap; }
+    Idx poolCapacity() const { return PoolCap; }
 
     // Static metadata
     static constexpr uint32_t scaleFactor() { return ScaleFactor; }
@@ -328,14 +282,14 @@ public:
 
 private:
     // ── The spine: two flat arrays indexed by raw price tick ──────────────────
-    std::array<PriceLevel, MaxPriceTick.value+1> bids_;
-    std::array<PriceLevel, MaxPriceTick.value+1> asks_;
+    std::array<PriceLevel, MaxPriceTick + 1> bids_;
+    std::array<PriceLevel, MaxPriceTick + 1> asks_;
 
     // ── The flat order pool: all orders in one contiguous buffer ──────────────
-    std::array<OrderSlot, PoolCap> pool_;
-    Idx freeHead_{INVALID_IDX};
-    Idx freeCount_{0};
-    Idx poolHwm_{0}; // high-water mark
+    std::array<OrderSlot, PoolCap>       pool_;
+    Idx                                  freeHead_  = INVALID_IDX;
+    Idx                                  freeCount_ = 0;
+    Idx                                  poolHwm_   = 0; // high-water mark
 
     std::unordered_map<OrderId, OrderLookup> lookup_;
     PTick bestBid_;  // raw tick, 0 = no bid
@@ -347,11 +301,11 @@ private:
     {
         if (freeHead_ != INVALID_IDX) {
             auto idx = freeHead_;
-            freeHead_ = pool_[idx.value].next;
+            freeHead_ = pool_[idx].next;
             --freeCount_;
             return idx;
         }
-        if (poolHwm_.value >= PoolCap)
+        if (poolHwm_ >= PoolCap)
             throw std::runtime_error("OrderBook pool exhausted (PoolCap=" +
                                     std::to_string(PoolCap) + ")");
         return poolHwm_++;
@@ -359,29 +313,29 @@ private:
 
     void freeSlot(Idx idx)
     {
-        pool_[idx.value].active = false;
-        pool_[idx.value].next   = freeHead_;
+        pool_[idx].active = false;
+        pool_[idx].next   = freeHead_;
         freeHead_         = idx;
         ++freeCount_;
     }
 
     void enqueue(PriceLevel& level, Idx idx, Qty qty)
     {
-        pool_[idx.value].next = INVALID_IDX;
+        pool_[idx].next = INVALID_IDX;
         if (level.tail == INVALID_IDX) {
             level.head = level.tail = idx;
         } else {
-            pool_[level.tail.value].next = idx;
-            level.tail = idx;
+            pool_[level.tail].next = idx;
+            level.tail             = idx;
         }
         level.totalQty += qty;
     }
 
     void fillHead(PriceLevel& level, Qty& want, OrderId aggressor, PTick rawPx, std::vector<Trade>& out)
     {
-        while (want && level.head != INVALID_IDX) {
+        while (want > 0 && level.head != INVALID_IDX) {
             Idx idx  = level.head;
-            OrderSlot& slot = pool_[idx.value];
+            OrderSlot& slot = pool_[idx];
 
             // Skip lazily-cancelled slots, recycle them
             if (!slot.active) {
@@ -398,7 +352,7 @@ private:
 
             out.push_back({slot.id, aggressor, Price::fromTick(rawPx), take});
 
-            if (!slot.qty) {
+            if (slot.qty == 0) {
                 lookup_.erase(slot.id);
                 level.head = slot.next;
                 if (level.head == INVALID_IDX) level.tail = INVALID_IDX;
@@ -408,14 +362,14 @@ private:
     }
     void updateBestBid(PTick from)
     {
-        for (PTick p = from; p > ZeroTick; --p)
-            if (bids_[p.value].totalQty) { bestBid_ = p; return; }
-        bestBid_ = ZeroTick;
+        for (PTick p = from; p > 0; --p)
+            if (bids_[p].totalQty > 0) { bestBid_ = p; return; }
+        bestBid_ = 0;
     }
     void updateBestAsk(PTick from)
     {
         for (PTick p = from; p <= MaxPriceTick; ++p)
-            if (asks_[p.value].totalQty) { bestAsk_ = p; return; }
-        bestAsk_ = PTick(MaxPriceTick.value+1);
+            if (asks_[p].totalQty > 0) { bestAsk_ = p; return; }
+        bestAsk_ = MaxPriceTick + 1;
     }
 };

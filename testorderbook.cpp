@@ -26,12 +26,12 @@ struct TestData {
     std::vector<OrderId> ids;
     std::vector<Side>    sides;
     std::vector<Price>   prices;
-    std::vector<uint32_t>     qtys;
+    std::vector<Qty>     qtys;
 
     TestData(int n, uint32_t seed = 42) {
         std::mt19937 rng(seed);
         std::uniform_real_distribution<double> pDist(MID - RANGE, MID + RANGE);
-        std::uniform_int_distribution<uint32_t>     qDist(1, 100);
+        std::uniform_int_distribution<Qty>     qDist(1, 100);
         std::uniform_int_distribution<int>     sDist(0, 1);
         ids.resize(n); sides.resize(n); prices.resize(n); qtys.resize(n);
         for (int i = 0; i < n; ++i) {
@@ -91,7 +91,7 @@ static void BM_AddOrder_NoMatch(benchmark::State& state)
     orders.reserve(N);
     {
         std::mt19937 rng(7);
-        std::uniform_int_distribution<uint32_t> qDist(1, 50);
+        std::uniform_int_distribution<Qty> qDist(1, 50);
         for (int i = 0; i < N; ++i) {
             Side  s = (i % 2 == 0) ? Side::Buy : Side::Sell;
             Price p = Price((s == Side::Buy) ? MID - 20.0 - (i % 100) * 0.01

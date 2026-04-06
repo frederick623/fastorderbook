@@ -85,24 +85,24 @@ Performed in MacBook Pro M4
 -----------------------------------------------------------------------------------------------------
 Benchmark                                           Time             CPU   Iterations UserCounters...
 -----------------------------------------------------------------------------------------------------
-BM_AddOrder/10000/repeats:5_mean              3700171 ns      3699848 ns            5 items_per_second=2.70301M/s
-BM_AddOrder/10000/repeats:5_median            3705004 ns      3704807 ns            5 items_per_second=2.6992M/s
-BM_AddOrder/10000/repeats:5_stddev              35181 ns        34902 ns            5 items_per_second=25.5055k/s
-BM_AddOrder/10000/repeats:5_cv                   0.95 %          0.94 %             5 items_per_second=0.94%
-BM_AddOrder_NoMatch/10000/repeats:5_mean      2075265 ns      2075166 ns            5 items_per_second=4.81907M/s
-BM_AddOrder_NoMatch/10000/repeats:5_median    2074964 ns      2074880 ns            5 items_per_second=4.81955M/s
-BM_AddOrder_NoMatch/10000/repeats:5_stddev      13965 ns        13982 ns            5 items_per_second=32.4234k/s
-BM_AddOrder_NoMatch/10000/repeats:5_cv           0.67 %          0.67 %             5 items_per_second=0.67%
-BM_CancelOrder/10000/repeats:5_mean           2091387 ns      2091259 ns            5 items_per_second=4.78187M/s
-BM_CancelOrder/10000/repeats:5_median         2094853 ns      2094688 ns            5 items_per_second=4.77398M/s
-BM_CancelOrder/10000/repeats:5_stddev            8163 ns         8170 ns            5 items_per_second=18.7351k/s
-BM_CancelOrder/10000/repeats:5_cv                0.39 %          0.39 %             5 items_per_second=0.39%
-BM_MarketSweep/100/repeats:5_mean              730298 ns       730241 ns            5 items_per_second=136.955k/s
-BM_MarketSweep/100/repeats:5_median            729110 ns       729035 ns            5 items_per_second=137.168k/s
-BM_MarketSweep/100/repeats:5_stddev              8226 ns         8198 ns            5 items_per_second=1.5255k/s
-BM_MarketSweep/100/repeats:5_cv                  1.13 %          1.12 %             5 items_per_second=1.11%
-BM_BestBidAsk/repeats:5_mean                     33.6 ns         33.6 ns            5
-BM_BestBidAsk/repeats:5_median                   33.6 ns         33.6 ns            5
-BM_BestBidAsk/repeats:5_stddev                  0.123 ns        0.124 ns            5
-BM_BestBidAsk/repeats:5_cv                       0.37 %          0.37 %             5
+BM_AddOrder/10000/repeats:5_mean              2770192 ns      2769969 ns            5 items_per_second=3.61025M/s
+BM_AddOrder/10000/repeats:5_median            2764139 ns      2763907 ns            5 items_per_second=3.61807M/s
+BM_AddOrder/10000/repeats:5_stddev              16015 ns        16185 ns            5 items_per_second=21.0824k/s
+BM_AddOrder/10000/repeats:5_cv                   0.58 %          0.58 %             5 items_per_second=0.58%
+BM_AddOrder_NoMatch/10000/repeats:5_mean      1728933 ns      1728148 ns            5 items_per_second=5.78665M/s
+BM_AddOrder_NoMatch/10000/repeats:5_median    1729952 ns      1729841 ns            5 items_per_second=5.78088M/s
+BM_AddOrder_NoMatch/10000/repeats:5_stddev       7866 ns         8420 ns            5 items_per_second=28.2777k/s
+BM_AddOrder_NoMatch/10000/repeats:5_cv           0.45 %          0.49 %             5 items_per_second=0.49%
+BM_CancelOrder/10000/repeats:5_mean           1381254 ns      1380339 ns            5 items_per_second=7.24518M/s
+BM_CancelOrder/10000/repeats:5_median         1381466 ns      1380732 ns            5 items_per_second=7.24253M/s
+BM_CancelOrder/10000/repeats:5_stddev           12866 ns        13732 ns            5 items_per_second=72.544k/s
+BM_CancelOrder/10000/repeats:5_cv                0.93 %          0.99 %             5 items_per_second=1.00%
+BM_MarketSweep/500/repeats:5_mean              227088 ns       226839 ns            5 items_per_second=2.20429M/s
+BM_MarketSweep/500/repeats:5_median            226772 ns       226746 ns            5 items_per_second=2.20511M/s
+BM_MarketSweep/500/repeats:5_stddev              1689 ns         1567 ns            5 items_per_second=15.1398k/s
+BM_MarketSweep/500/repeats:5_cv                  0.74 %          0.69 %             5 items_per_second=0.69%
+BM_BestBidAsk/repeats:5_mean                     23.4 ns         23.4 ns            5
+BM_BestBidAsk/repeats:5_median                   23.4 ns         23.4 ns            5
+BM_BestBidAsk/repeats:5_stddev                  0.077 ns        0.078 ns            5
+BM_BestBidAsk/repeats:5_cv                       0.33 %          0.33 %             5
 ```
