@@ -10,6 +10,8 @@
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
+#include <concepts>
+#include <type_traits>
 
 // ── Non-template globals ──────────────────────────────────────────────────────
 
@@ -99,6 +101,33 @@ protected:
     uint32_t sf_  = 1;
 };
 
+// ── Helper concept used by the container checks below ────────────────────────
+//  True when C (possibly a reference type) is a container whose value_type is T.
+template<typename C, typename T>
+concept container_of =
+    std::is_same_v<typename std::remove_reference_t<C>::value_type, T>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  OrderBookImpl concept  –  guards the CRTP contract for OrderBookBase<Derived>
+//
+//  A type D satisfies OrderBookImpl when it exposes the three sizing queries
+//  that OrderBookBase needs to drive its algorithms.  The private container
+//  members (bids_, asks_, pool_) are verified separately inside the
+//  OrderBookBase constructor where friend access makes them reachable.
+//
+//  NOTE: the concept cannot be used directly as a template-parameter constraint
+//  on OrderBookBase because Derived is an incomplete type at the point the base
+//  is named in the derived class's base-list (standard CRTP limitation).  It is
+//  therefore applied via static_assert inside the protected constructor, which
+//  is instantiated only after Derived is fully defined.
+// ─────────────────────────────────────────────────────────────────────────────
+template<typename D>
+concept OrderBookImpl = requires(const D& cd) {
+    { cd.scaleFactor()  } -> std::convertible_to<uint32_t>;
+    { cd.maxPriceTick() } -> std::convertible_to<PTick>;
+    { cd.poolCap()      } -> std::convertible_to<uint32_t>;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  OrderBookBase<Derived>  –  CRTP mixin that owns all order-matching logic
 //
@@ -113,6 +142,8 @@ protected:
 //  • Exposes   scaleFactor()  maxPriceTick()  poolCap()  (static constexpr
 //    or const instance methods – both work because they are called on the
 //    derived instance via D()).
+//  • bids_ and asks_ must be random-access containers of PriceLevel.
+//  • pool_ must be a random-access container of OrderSlot.
 //  • Sets  this->bestAsk_ = maxPriceTick() + 1  in its constructor.
 // ─────────────────────────────────────────────────────────────────────────────
 template<class Derived>
@@ -121,6 +152,24 @@ class OrderBookBase {
     const Derived& D() const { return static_cast<const Derived&>(*this); }
 
 protected:
+    // ── CRTP contract guard ───────────────────────────────────────────────────
+    //  Checked here rather than on the template parameter because Derived is an
+    //  incomplete type when OrderBookBase<Derived> is first named in the base-
+    //  list.  By the time this constructor runs, Derived is fully defined and
+    //  the friend declaration grants access to its private containers.
+    OrderBookBase() {
+        static_assert(OrderBookImpl<Derived>,
+            "Derived must expose scaleFactor(), maxPriceTick(), and poolCap()");
+
+        // Verify that bids_, asks_, pool_ are containers of the expected types.
+        // (Accessible here because Derived declares  friend OrderBookBase<Derived>.)
+        static_assert(container_of<decltype(std::declval<Derived>().bids_), PriceLevel>,
+            "Derived::bids_ must be a container of PriceLevel");
+        static_assert(container_of<decltype(std::declval<Derived>().asks_), PriceLevel>,
+            "Derived::asks_ must be a container of PriceLevel");
+        static_assert(container_of<decltype(std::declval<Derived>().pool_), OrderSlot>,
+            "Derived::pool_ must be a container of OrderSlot");
+    }
     // ── Shared state ──────────────────────────────────────────────────────────
     std::unordered_map<OrderId, OrderLookup> lookup_;
     PTick bestBid_   = 0;
