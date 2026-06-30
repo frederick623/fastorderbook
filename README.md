@@ -80,29 +80,54 @@ if (auto bid = book.bestBid()) {
 ```
 
 ## Benchmark
-Performed in MacBook Pro M4
+Performed in MacBook Air M5
 ```
------------------------------------------------------------------------------------------------------
-Benchmark                                           Time             CPU   Iterations UserCounters...
------------------------------------------------------------------------------------------------------
-BM_AddOrder/10000/repeats:5_mean              2770192 ns      2769969 ns            5 items_per_second=3.61025M/s
-BM_AddOrder/10000/repeats:5_median            2764139 ns      2763907 ns            5 items_per_second=3.61807M/s
-BM_AddOrder/10000/repeats:5_stddev              16015 ns        16185 ns            5 items_per_second=21.0824k/s
-BM_AddOrder/10000/repeats:5_cv                   0.58 %          0.58 %             5 items_per_second=0.58%
-BM_AddOrder_NoMatch/10000/repeats:5_mean      1728933 ns      1728148 ns            5 items_per_second=5.78665M/s
-BM_AddOrder_NoMatch/10000/repeats:5_median    1729952 ns      1729841 ns            5 items_per_second=5.78088M/s
-BM_AddOrder_NoMatch/10000/repeats:5_stddev       7866 ns         8420 ns            5 items_per_second=28.2777k/s
-BM_AddOrder_NoMatch/10000/repeats:5_cv           0.45 %          0.49 %             5 items_per_second=0.49%
-BM_CancelOrder/10000/repeats:5_mean           1381254 ns      1380339 ns            5 items_per_second=7.24518M/s
-BM_CancelOrder/10000/repeats:5_median         1381466 ns      1380732 ns            5 items_per_second=7.24253M/s
-BM_CancelOrder/10000/repeats:5_stddev           12866 ns        13732 ns            5 items_per_second=72.544k/s
-BM_CancelOrder/10000/repeats:5_cv                0.93 %          0.99 %             5 items_per_second=1.00%
-BM_MarketSweep/500/repeats:5_mean              227088 ns       226839 ns            5 items_per_second=2.20429M/s
-BM_MarketSweep/500/repeats:5_median            226772 ns       226746 ns            5 items_per_second=2.20511M/s
-BM_MarketSweep/500/repeats:5_stddev              1689 ns         1567 ns            5 items_per_second=15.1398k/s
-BM_MarketSweep/500/repeats:5_cv                  0.74 %          0.69 %             5 items_per_second=0.69%
-BM_BestBidAsk/repeats:5_mean                     23.4 ns         23.4 ns            5
-BM_BestBidAsk/repeats:5_median                   23.4 ns         23.4 ns            5
-BM_BestBidAsk/repeats:5_stddev                  0.077 ns        0.078 ns            5
-BM_BestBidAsk/repeats:5_cv                       0.33 %          0.33 %             5
+CPU Caches:
+  L1 Data 64 KiB
+  L1 Instruction 128 KiB
+  L2 Unified 6144 KiB (x10)
+Load Average: 1.46, 1.56, 1.57
+---------------------------------------------------------------------------------------------------------
+Benchmark                                               Time             CPU   Iterations UserCounters...
+---------------------------------------------------------------------------------------------------------
+BM_AddOrder/10000/repeats:5_mean                  2640136 ns      2639038 ns            5 items_per_second=3.7893M/s
+BM_AddOrder/10000/repeats:5_median                2635104 ns      2633849 ns            5 items_per_second=3.79672M/s
+BM_AddOrder/10000/repeats:5_stddev                   9692 ns         9659 ns            5 items_per_second=13.8391k/s
+BM_AddOrder/10000/repeats:5_cv                       0.37 %          0.37 %             5 items_per_second=0.37%
+BM_AddOrder_NoMatch/10000/repeats:5_mean          1389513 ns      1388889 ns            5 items_per_second=7.20003M/s
+BM_AddOrder_NoMatch/10000/repeats:5_median        1388916 ns      1388268 ns            5 items_per_second=7.20322M/s
+BM_AddOrder_NoMatch/10000/repeats:5_stddev           3093 ns         3057 ns            5 items_per_second=15.8514k/s
+BM_AddOrder_NoMatch/10000/repeats:5_cv               0.22 %          0.22 %             5 items_per_second=0.22%
+BM_CancelOrder/10000/repeats:5_mean               1311085 ns      1310480 ns            5 items_per_second=7.63089M/s
+BM_CancelOrder/10000/repeats:5_median             1312327 ns      1311788 ns            5 items_per_second=7.62318M/s
+BM_CancelOrder/10000/repeats:5_stddev                5321 ns         5427 ns            5 items_per_second=31.6579k/s
+BM_CancelOrder/10000/repeats:5_cv                    0.41 %          0.41 %             5 items_per_second=0.41%
+BM_MarketSweep/100/repeats:5_mean                  339429 ns       339285 ns            5 items_per_second=294.847k/s
+BM_MarketSweep/100/repeats:5_median                338096 ns       337970 ns            5 items_per_second=295.884k/s
+BM_MarketSweep/100/repeats:5_stddev                  7387 ns         7401 ns            5 items_per_second=6.30035k/s
+BM_MarketSweep/100/repeats:5_cv                      2.18 %          2.18 %             5 items_per_second=2.14%
+BM_BestBidAsk/repeats:5_mean                         28.6 ns         28.6 ns            5
+BM_BestBidAsk/repeats:5_median                       28.6 ns         28.6 ns            5
+BM_BestBidAsk/repeats:5_stddev                      0.024 ns        0.025 ns            5
+BM_BestBidAsk/repeats:5_cv                           0.09 %          0.09 %             5
+BM_Dyn_AddOrder/10000/repeats:5_mean              4469473 ns      4467513 ns            5 items_per_second=2.23839M/s
+BM_Dyn_AddOrder/10000/repeats:5_median            4470254 ns      4468427 ns            5 items_per_second=2.23792M/s
+BM_Dyn_AddOrder/10000/repeats:5_stddev               8432 ns         8424 ns            5 items_per_second=4.22216k/s
+BM_Dyn_AddOrder/10000/repeats:5_cv                   0.19 %          0.19 %             5 items_per_second=0.19%
+BM_Dyn_AddOrder_NoMatch/10000/repeats:5_mean      3167700 ns      3166193 ns            5 items_per_second=3.15837M/s
+BM_Dyn_AddOrder_NoMatch/10000/repeats:5_median    3168019 ns      3166561 ns            5 items_per_second=3.158M/s
+BM_Dyn_AddOrder_NoMatch/10000/repeats:5_stddev       2601 ns         2602 ns            5 items_per_second=2.59565k/s
+BM_Dyn_AddOrder_NoMatch/10000/repeats:5_cv           0.08 %          0.08 %             5 items_per_second=0.08%
+BM_Dyn_CancelOrder/10000/repeats:5_mean           2987755 ns      2986382 ns            5 items_per_second=3.34854M/s
+BM_Dyn_CancelOrder/10000/repeats:5_median         2988247 ns      2987047 ns            5 items_per_second=3.34779M/s
+BM_Dyn_CancelOrder/10000/repeats:5_stddev            3952 ns         4007 ns            5 items_per_second=4.49412k/s
+BM_Dyn_CancelOrder/10000/repeats:5_cv                0.13 %          0.13 %             5 items_per_second=0.13%
+BM_Dyn_MarketSweep/100/repeats:5_mean             2013905 ns      2013073 ns            5 items_per_second=49.6754k/s
+BM_Dyn_MarketSweep/100/repeats:5_median           2014178 ns      2013319 ns            5 items_per_second=49.6692k/s
+BM_Dyn_MarketSweep/100/repeats:5_stddev              2685 ns         2772 ns            5 items_per_second=68.4599/s
+BM_Dyn_MarketSweep/100/repeats:5_cv                  0.13 %          0.14 %             5 items_per_second=0.14%
+BM_Dyn_BestBidAsk/repeats:5_mean                     29.8 ns         29.7 ns            5
+BM_Dyn_BestBidAsk/repeats:5_median                   29.7 ns         29.7 ns            5
+BM_Dyn_BestBidAsk/repeats:5_stddev                  0.030 ns        0.031 ns            5
+BM_Dyn_BestBidAsk/repeats:5_cv                       0.10 %          0.10 %             5
 ```
