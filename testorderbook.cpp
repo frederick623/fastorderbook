@@ -13,6 +13,12 @@ using Book  = OrderBook<2'000, 100, 500'000>;
 using Price = Book::Price;
 using Trade = Book::Trade;
 
+// DynamicOrderBook with equivalent parameters to Book for comparison.
+// maxPrice=2000, scaleFactor=100, poolCap=500000
+static constexpr uint32_t kDynMaxPrice    = 2'000;
+static constexpr uint32_t kDynScale       = 100;
+static constexpr uint32_t kDynPoolCap     = 500'000;
+
 static constexpr double MID   = 500.00;   // $500.00
 static constexpr double RANGE =   2.00;   // ±$2.00 = ±200 ticks
 
@@ -186,6 +192,146 @@ static void BM_BestBidAsk(benchmark::State& state)
     }
 }
 BENCHMARK(BM_BestBidAsk)
+    ->Unit(benchmark::kNanosecond)
+    ->Repetitions(5)
+    ->DisplayAggregatesOnly(true);
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  DynamicOrderBook benchmarks – same workloads for apples-to-apples comparison
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── BM_Dyn_AddOrder ──────────────────────────────────────────────────────────
+
+static void BM_Dyn_AddOrder(benchmark::State& state)
+{
+    const int N  = static_cast<int>(state.range(0));
+    const auto& d = testData(N);
+
+    for (auto _ : state) {
+        state.PauseTiming();
+        auto ob = std::make_unique<DynamicOrderBook>(kDynMaxPrice, kDynScale, kDynPoolCap);
+        for (int i = 0; i < std::min(N / 10, 500); ++i) {
+            Side  s = (i % 2 == 0) ? Side::Buy : Side::Sell;
+            ob->addOrder(2'000'000 + i, s,
+                         (s == Side::Buy) ? MID - 0.20 : MID + 0.20, 50);
+        }
+        state.ResumeTiming();
+
+        for (int i = 0; i < N; ++i)
+            benchmark::DoNotOptimize(
+                ob->addOrder(d.ids[i], d.sides[i], d.prices[i].value(), d.qtys[i]));
+    }
+    state.SetItemsProcessed(state.iterations() * N);
+}
+BENCHMARK(BM_Dyn_AddOrder)
+    ->Arg(10'000)
+    ->Unit(benchmark::kNanosecond)
+    ->Repetitions(5)
+    ->DisplayAggregatesOnly(true);
+
+// ── BM_Dyn_AddOrder_NoMatch ──────────────────────────────────────────────────
+
+static void BM_Dyn_AddOrder_NoMatch(benchmark::State& state)
+{
+    const int N = static_cast<int>(state.range(0));
+
+    std::vector<std::tuple<OrderId,Side,double,Qty>> orders;
+    orders.reserve(N);
+    {
+        std::mt19937 rng(7);
+        std::uniform_int_distribution<Qty> qDist(1, 50);
+        for (int i = 0; i < N; ++i) {
+            Side  s = (i % 2 == 0) ? Side::Buy : Side::Sell;
+            double p = (s == Side::Buy) ? MID - 20.0 - (i % 100) * 0.01
+                                        : MID + 20.0 + (i % 100) * 0.01;
+            orders.emplace_back(i + 1, s, p, qDist(rng));
+        }
+    }
+
+    for (auto _ : state) {
+        state.PauseTiming();
+        auto ob = std::make_unique<DynamicOrderBook>(kDynMaxPrice, kDynScale, kDynPoolCap);
+        state.ResumeTiming();
+
+        for (auto& [id, s, p, q] : orders)
+            benchmark::DoNotOptimize(ob->addOrder(id, s, p, q));
+    }
+    state.SetItemsProcessed(state.iterations() * N);
+}
+BENCHMARK(BM_Dyn_AddOrder_NoMatch)
+    ->Arg(10'000)
+    ->Unit(benchmark::kNanosecond)
+    ->Repetitions(5)
+    ->DisplayAggregatesOnly(true);
+
+// ── BM_Dyn_CancelOrder ───────────────────────────────────────────────────────
+
+static void BM_Dyn_CancelOrder(benchmark::State& state)
+{
+    const int N = static_cast<int>(state.range(0));
+
+    for (auto _ : state) {
+        state.PauseTiming();
+        auto ob = std::make_unique<DynamicOrderBook>(kDynMaxPrice, kDynScale, kDynPoolCap);
+        std::vector<OrderId> ids(N);
+        for (int i = 0; i < N; ++i) {
+            Side   s = (i % 2 == 0) ? Side::Buy : Side::Sell;
+            double p = (s == Side::Buy) ? MID - 0.20 : MID + 0.20;
+            ob->addOrder(i + 1, s, p, 10);
+            ids[i] = i + 1;
+        }
+        std::shuffle(ids.begin(), ids.end(), std::mt19937(13));
+        state.ResumeTiming();
+
+        for (OrderId id : ids)
+            benchmark::DoNotOptimize(ob->cancelOrder(id));
+    }
+    state.SetItemsProcessed(state.iterations() * N);
+}
+BENCHMARK(BM_Dyn_CancelOrder)
+    ->Arg(10'000)
+    ->Unit(benchmark::kNanosecond)
+    ->Repetitions(5)
+    ->DisplayAggregatesOnly(true);
+
+// ── BM_Dyn_MarketSweep ───────────────────────────────────────────────────────
+
+static void BM_Dyn_MarketSweep(benchmark::State& state)
+{
+    const int N = static_cast<int>(state.range(0));
+
+    for (auto _ : state) {
+        state.PauseTiming();
+        auto ob = std::make_unique<DynamicOrderBook>(kDynMaxPrice, kDynScale, kDynPoolCap);
+        for (int i = 0; i < N; ++i)
+            ob->addOrder(i + 1, Side::Sell, MID + 0.01 * (i + 1), 1);
+        state.ResumeTiming();
+
+        benchmark::DoNotOptimize(
+            ob->addOrder(999'999, Side::Buy, MID + 0.01 * (N + 1), (Qty)N));
+    }
+    state.SetItemsProcessed(state.iterations() * N);
+}
+BENCHMARK(BM_Dyn_MarketSweep)
+    ->Arg(100)
+    ->Unit(benchmark::kNanosecond)
+    ->Repetitions(5)
+    ->DisplayAggregatesOnly(true);
+
+// ── BM_Dyn_BestBidAsk ────────────────────────────────────────────────────────
+
+static void BM_Dyn_BestBidAsk(benchmark::State& state)
+{
+    auto ob = std::make_unique<DynamicOrderBook>(kDynMaxPrice, kDynScale, kDynPoolCap);
+    ob->addOrder(1, Side::Buy,  MID - 0.10, 100);
+    ob->addOrder(2, Side::Sell, MID + 0.10, 100);
+
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(ob->bestBid());
+        benchmark::DoNotOptimize(ob->bestAsk());
+    }
+}
+BENCHMARK(BM_Dyn_BestBidAsk)
     ->Unit(benchmark::kNanosecond)
     ->Repetitions(5)
     ->DisplayAggregatesOnly(true);
