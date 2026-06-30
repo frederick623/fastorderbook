@@ -101,6 +101,12 @@ protected:
     uint32_t sf_  = 1;
 };
 
+// ── Helper concept used by the container checks below ────────────────────────
+//  True when C (possibly a reference type) is a container whose value_type is T.
+template<typename C, typename T>
+concept container_of =
+    std::is_same_v<typename std::remove_reference_t<C>::value_type, T>;
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  OrderBookImpl concept  –  guards the CRTP contract for OrderBookBase<Derived>
 //
@@ -157,23 +163,11 @@ protected:
 
         // Verify that bids_, asks_, pool_ are containers of the expected types.
         // (Accessible here because Derived declares  friend OrderBookBase<Derived>.)
-        static_assert(
-            std::is_same_v<
-                typename std::remove_reference_t<
-                    decltype(std::declval<Derived>().bids_)>::value_type,
-                PriceLevel>,
+        static_assert(container_of<decltype(std::declval<Derived>().bids_), PriceLevel>,
             "Derived::bids_ must be a container of PriceLevel");
-        static_assert(
-            std::is_same_v<
-                typename std::remove_reference_t<
-                    decltype(std::declval<Derived>().asks_)>::value_type,
-                PriceLevel>,
+        static_assert(container_of<decltype(std::declval<Derived>().asks_), PriceLevel>,
             "Derived::asks_ must be a container of PriceLevel");
-        static_assert(
-            std::is_same_v<
-                typename std::remove_reference_t<
-                    decltype(std::declval<Derived>().pool_)>::value_type,
-                OrderSlot>,
+        static_assert(container_of<decltype(std::declval<Derived>().pool_), OrderSlot>,
             "Derived::pool_ must be a container of OrderSlot");
     }
     // ── Shared state ──────────────────────────────────────────────────────────
