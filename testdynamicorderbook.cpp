@@ -142,6 +142,51 @@ TEST(DynamicOrderBook, SweepMultipleLevels) {
     EXPECT_FALSE(ob.bestAsk().has_value());
 }
 
+TEST(DynamicOrderBook, MarketBuy_SweepsBestAsksWithoutRestingRemainder) {
+    auto ob = makeDynBook();
+    ob.addOrder(1, Side::Sell, kMid + 0.01, 10);
+    ob.addOrder(2, Side::Sell, kMid + 0.02, 10);
+
+    auto trades = ob.addOrder(3, Side::Buy, 0.0, 25);
+
+    ASSERT_EQ(trades.size(), 2u);
+    EXPECT_DOUBLE_EQ(trades[0].price.value(), kMid + 0.01);
+    EXPECT_DOUBLE_EQ(trades[1].price.value(), kMid + 0.02);
+    EXPECT_EQ(trades[0].qty, 10u);
+    EXPECT_EQ(trades[1].qty, 10u);
+    EXPECT_FALSE(ob.bestAsk().has_value());
+    EXPECT_FALSE(ob.bestBid().has_value());
+    EXPECT_FALSE(ob.hasOrder(3));
+}
+
+TEST(DynamicOrderBook, MarketSell_SweepsBestBidsWithoutRestingRemainder) {
+    auto ob = makeDynBook();
+    ob.addOrder(1, Side::Buy, kMid - 0.01, 10);
+    ob.addOrder(2, Side::Buy, kMid - 0.02, 10);
+
+    auto trades = ob.addOrder(3, Side::Sell, 0.0, 25);
+
+    ASSERT_EQ(trades.size(), 2u);
+    EXPECT_DOUBLE_EQ(trades[0].price.value(), kMid - 0.01);
+    EXPECT_DOUBLE_EQ(trades[1].price.value(), kMid - 0.02);
+    EXPECT_EQ(trades[0].qty, 10u);
+    EXPECT_EQ(trades[1].qty, 10u);
+    EXPECT_FALSE(ob.bestBid().has_value());
+    EXPECT_FALSE(ob.bestAsk().has_value());
+    EXPECT_FALSE(ob.hasOrder(3));
+}
+
+TEST(DynamicOrderBook, MarketOrderOnEmptyBook_DoesNotRest) {
+    auto ob = makeDynBook();
+
+    EXPECT_TRUE(ob.addOrder(1, Side::Buy, 0.0, 10).empty());
+    EXPECT_TRUE(ob.addOrder(2, Side::Sell, 0.0, 10).empty());
+    EXPECT_FALSE(ob.bestBid().has_value());
+    EXPECT_FALSE(ob.bestAsk().has_value());
+    EXPECT_FALSE(ob.hasOrder(1));
+    EXPECT_FALSE(ob.hasOrder(2));
+}
+
 TEST(DynamicOrderBook, BuyBelowBestAsk_DoesNotMatch) {
     auto ob = makeDynBook();
     ob.addOrder(1, Side::Sell, kMid + 0.50, 100);
