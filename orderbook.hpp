@@ -207,7 +207,8 @@ public:
         const bool market = price.tick() == 0;
 
         if (side == Side::Buy) {
-            while (qty > 0 && (market || bestAsk_ <= price.tick())) {
+            while (qty > 0 && bestAsk_ <= D().maxPriceTick() &&
+                   (market || bestAsk_ <= price.tick())) {
                 fillHead(D().asks_[bestAsk_], qty, id, bestAsk_, trades);
                 if (D().asks_[bestAsk_].totalQty == 0) updateBestAsk(bestAsk_);
             }

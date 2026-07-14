@@ -172,6 +172,17 @@ TEST(DynamicOrderBook, MarketSell_SweepsBestBidsWithoutRestingRemainder) {
     EXPECT_FALSE(ob.hasOrder(3));
 }
 
+TEST(DynamicOrderBook, MarketOrderOnEmptyBook_DoesNotRest) {
+    auto ob = makeDynBook();
+
+    EXPECT_TRUE(ob.addOrder(1, Side::Buy, 0.0, 10).empty());
+    EXPECT_TRUE(ob.addOrder(2, Side::Sell, 0.0, 10).empty());
+    EXPECT_FALSE(ob.bestBid().has_value());
+    EXPECT_FALSE(ob.bestAsk().has_value());
+    EXPECT_FALSE(ob.hasOrder(1));
+    EXPECT_FALSE(ob.hasOrder(2));
+}
+
 TEST(DynamicOrderBook, BuyBelowBestAsk_DoesNotMatch) {
     auto ob = makeDynBook();
     ob.addOrder(1, Side::Sell, kMid + 0.50, 100);
