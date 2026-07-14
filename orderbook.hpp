@@ -205,8 +205,8 @@ public:
 
         std::vector<Trade> trades;
         const bool market = price.tick() == 0;
-        const PTick matchPrice = market && side == Side::Buy
-            ? D().maxPriceTick()
+        const PTick matchPrice = market
+            ? (side == Side::Buy ? D().maxPriceTick() : 0)
             : price.tick();
 
         if (side == Side::Buy) {

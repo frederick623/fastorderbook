@@ -152,6 +152,8 @@ TEST(DynamicOrderBook, MarketBuy_SweepsBestAsksWithoutRestingRemainder) {
     ASSERT_EQ(trades.size(), 2u);
     EXPECT_DOUBLE_EQ(trades[0].price.value(), kMid + 0.01);
     EXPECT_DOUBLE_EQ(trades[1].price.value(), kMid + 0.02);
+    EXPECT_EQ(trades[0].qty, 10u);
+    EXPECT_EQ(trades[1].qty, 10u);
     EXPECT_FALSE(ob.bestAsk().has_value());
     EXPECT_FALSE(ob.bestBid().has_value());
     EXPECT_FALSE(ob.hasOrder(3));
@@ -167,6 +169,8 @@ TEST(DynamicOrderBook, MarketSell_SweepsBestBidsWithoutRestingRemainder) {
     ASSERT_EQ(trades.size(), 2u);
     EXPECT_DOUBLE_EQ(trades[0].price.value(), kMid - 0.01);
     EXPECT_DOUBLE_EQ(trades[1].price.value(), kMid - 0.02);
+    EXPECT_EQ(trades[0].qty, 10u);
+    EXPECT_EQ(trades[1].qty, 10u);
     EXPECT_FALSE(ob.bestBid().has_value());
     EXPECT_FALSE(ob.bestAsk().has_value());
     EXPECT_FALSE(ob.hasOrder(3));
