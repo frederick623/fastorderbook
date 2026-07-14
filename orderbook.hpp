@@ -205,10 +205,12 @@ public:
 
         std::vector<Trade> trades;
         const bool market = price.tick() == 0;
+        const PTick matchPrice = market && side == Side::Buy
+            ? D().maxPriceTick()
+            : price.tick();
 
         if (side == Side::Buy) {
-            while (qty > 0 && bestAsk_ <= D().maxPriceTick() &&
-                   (market || bestAsk_ <= price.tick())) {
+            while (qty > 0 && bestAsk_ <= matchPrice) {
                 fillHead(D().asks_[bestAsk_], qty, id, bestAsk_, trades);
                 if (D().asks_[bestAsk_].totalQty == 0) updateBestAsk(bestAsk_);
             }
@@ -220,7 +222,7 @@ public:
                 if (price.tick() > bestBid_) bestBid_ = price.tick();
             }
         } else {
-            while (qty > 0 && bestBid_ > 0 && (market || bestBid_ >= price.tick())) {
+            while (qty > 0 && bestBid_ >= matchPrice && bestBid_ > 0) {
                 fillHead(D().bids_[bestBid_], qty, id, bestBid_, trades);
                 if (D().bids_[bestBid_].totalQty == 0) updateBestBid(bestBid_);
             }
