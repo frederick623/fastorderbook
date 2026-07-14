@@ -204,9 +204,10 @@ public:
         if (lookup_.count(id)) throw std::invalid_argument("duplicate order id");
 
         std::vector<Trade> trades;
-        const bool market = price.tick() == 0;
+        constexpr PTick marketPriceTick = 0;
+        const bool market = price.tick() == marketPriceTick;
         const PTick matchPrice = market
-            ? (side == Side::Buy ? D().maxPriceTick() : 0)
+            ? (side == Side::Buy ? D().maxPriceTick() : marketPriceTick)
             : price.tick();
 
         if (side == Side::Buy) {
