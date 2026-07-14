@@ -204,13 +204,14 @@ public:
         if (lookup_.count(id)) throw std::invalid_argument("duplicate order id");
 
         std::vector<Trade> trades;
+        const bool market = price.tick() == 0;
 
         if (side == Side::Buy) {
-            while (qty > 0 && bestAsk_ <= price.tick()) {
+            while (qty > 0 && (market || bestAsk_ <= price.tick())) {
                 fillHead(D().asks_[bestAsk_], qty, id, bestAsk_, trades);
                 if (D().asks_[bestAsk_].totalQty == 0) updateBestAsk(bestAsk_);
             }
-            if (qty > 0) {
+            if (qty > 0 && !market) {
                 auto idx = allocSlot();
                 D().pool_[idx] = {id, price.tick(), qty, side};
                 enqueue(D().bids_[price.tick()], idx, qty);
@@ -218,11 +219,11 @@ public:
                 if (price.tick() > bestBid_) bestBid_ = price.tick();
             }
         } else {
-            while (qty > 0 && bestBid_ >= price.tick() && bestBid_ > 0) {
+            while (qty > 0 && bestBid_ > 0 && (market || bestBid_ >= price.tick())) {
                 fillHead(D().bids_[bestBid_], qty, id, bestBid_, trades);
                 if (D().bids_[bestBid_].totalQty == 0) updateBestBid(bestBid_);
             }
-            if (qty > 0) {
+            if (qty > 0 && !market) {
                 auto idx = allocSlot();
                 D().pool_[idx] = {id, price.tick(), qty, side};
                 enqueue(D().asks_[price.tick()], idx, qty);
