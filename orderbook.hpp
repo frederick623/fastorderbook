@@ -68,6 +68,15 @@ struct OrderLookup {
     Side     side;
 };
 
+// ── Order metadata policy ─────────────────────────────────────────────────────
+//  Any user-defined copyable, default-constructible, non-empty struct can be
+//  used as Meta.  NoMeta (empty) allocates no storage and adds no per-trade cost.
+
+struct NoMeta {};
+
+template<class M>
+inline constexpr bool has_meta_v = !std::is_empty_v<M>;
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  BookPrice  –  shared price type used by both OrderBook<> and DynamicOrderBook
 //
@@ -146,7 +155,7 @@ concept OrderBookImpl = requires(const D& cd) {
 //  • pool_ must be a random-access container of OrderSlot.
 //  • Sets  this->bestAsk_ = maxPriceTick() + 1  in its constructor.
 // ─────────────────────────────────────────────────────────────────────────────
-template<class Derived>
+template<class Derived, class Meta = NoMeta>
 class OrderBookBase {
     Derived&       D()       { return static_cast<Derived&>(*this); }
     const Derived& D() const { return static_cast<const Derived&>(*this); }
@@ -178,24 +187,38 @@ protected:
     Idx   freeCount_ = 0;
     Idx   poolHwm_   = 0;
 
+    // Cold per-order payload, indexed by pool index; absent when Meta is empty.
+    [[no_unique_address]]
+    std::conditional_t<has_meta_v<Meta>, std::vector<Meta>, NoMeta> meta_;
+
+    // Derived constructors must call this once poolCap() is valid.
+    void initMeta() {
+        if constexpr (has_meta_v<Meta>) meta_.resize(D().poolCap());
+    }
+
 public:
-    using Price = BookPrice;
+    using Price     = BookPrice;
+    using MetaType  = Meta;
 
     struct Trade {
         OrderId   passiveId;
         OrderId   aggressorId;
         BookPrice price;
         Qty       qty;
+        [[no_unique_address]] Meta passiveMeta{};
+        [[no_unique_address]] Meta aggressorMeta{};
     };
 
     // ── Core API ──────────────────────────────────────────────────────────────
 
-    std::vector<Trade> addOrder(OrderId id, Side side, double price, Qty qty)
+    std::vector<Trade> addOrder(OrderId id, Side side, double price, Qty qty,
+                                const Meta& meta = {})
     {
-        return addOrder(id, side, BookPrice(price, D().scaleFactor()), qty);
+        return addOrder(id, side, BookPrice(price, D().scaleFactor()), qty, meta);
     }
 
-    std::vector<Trade> addOrder(OrderId id, Side side, BookPrice price, Qty qty)
+    std::vector<Trade> addOrder(OrderId id, Side side, BookPrice price, Qty qty,
+                                const Meta& meta = {})
     {
         if (price.tick() > D().maxPriceTick()) throw std::out_of_range(
             "Price tick " + std::to_string(price.tick()) +
@@ -211,25 +234,27 @@ public:
             : price.tick();
 
         if (side == Side::Buy) {
-            while (qty > 0 && bestAsk_ <= matchPrice) {
-                fillHead(D().asks_[bestAsk_], qty, id, bestAsk_, trades);
+            while (qty > 0 && bestAsk_ <= price.tick()) {
+                fillHead(D().asks_[bestAsk_], qty, id, bestAsk_, meta, trades);
                 if (D().asks_[bestAsk_].totalQty == 0) updateBestAsk(bestAsk_);
             }
             if (qty > 0 && !market) {
                 auto idx = allocSlot();
                 D().pool_[idx] = {id, price.tick(), qty, side};
+                storeMeta(idx, meta);
                 enqueue(D().bids_[price.tick()], idx, qty);
                 lookup_[id] = {idx, price.tick(), side};
                 if (price.tick() > bestBid_) bestBid_ = price.tick();
             }
         } else {
-            while (qty > 0 && bestBid_ >= matchPrice && bestBid_ > 0) {
-                fillHead(D().bids_[bestBid_], qty, id, bestBid_, trades);
+            while (qty > 0 && bestBid_ >= price.tick() && bestBid_ > 0) {
+                fillHead(D().bids_[bestBid_], qty, id, bestBid_, meta, trades);
                 if (D().bids_[bestBid_].totalQty == 0) updateBestBid(bestBid_);
             }
             if (qty > 0 && !market) {
                 auto idx = allocSlot();
                 D().pool_[idx] = {id, price.tick(), qty, side};
+                storeMeta(idx, meta);
                 enqueue(D().asks_[price.tick()], idx, qty);
                 lookup_[id] = {idx, price.tick(), side};
                 if (price.tick() < bestAsk_) bestAsk_ = price.tick();
@@ -322,6 +347,13 @@ public:
 
     bool hasOrder(OrderId id) const { return lookup_.count(id) > 0; }
 
+    // Metadata of a resting order, or nullptr if the order is not live.
+    const Meta* orderMeta(OrderId id) const requires has_meta_v<Meta>
+    {
+        auto it = lookup_.find(id);
+        return it == lookup_.end() ? nullptr : &meta_[it->second.poolIdx];
+    }
+
     Idx poolUsed()     const { return poolHwm_ - freeCount_; }
     Idx poolCapacity() const { return D().poolCap(); }
 
@@ -362,8 +394,19 @@ private:
         level.totalQty += qty;
     }
 
-    void fillHead(PriceLevel& level, Qty& want, OrderId aggressor,
-                  PTick rawPx, std::vector<Trade>& out)
+    void storeMeta(Idx idx, const Meta& m)
+    {
+        if constexpr (has_meta_v<Meta>) meta_[idx] = m;
+    }
+
+    Meta metaAt(Idx idx) const
+    {
+        if constexpr (has_meta_v<Meta>) return meta_[idx];
+        else                            return {};
+    }
+
+    void fillHead(PriceLevel& level, Qty& want, OrderId aggressor, PTick rawPx,
+                  const Meta& aggressorMeta, std::vector<Trade>& out)
     {
         while (want > 0 && level.head != INVALID_IDX) {
             Idx        idx  = level.head;
@@ -383,7 +426,8 @@ private:
             want           -= take;
 
             out.push_back({slot.id, aggressor,
-                           BookPrice::fromTick(rawPx, D().scaleFactor()), take});
+                           BookPrice::fromTick(rawPx, D().scaleFactor()), take,
+                           metaAt(idx), aggressorMeta});
 
             if (slot.qty == 0) {
                 lookup_.erase(slot.id);
@@ -417,9 +461,10 @@ private:
 //  ⚠  Because bids_/asks_/pool_ are large, always heap-allocate:
 //     auto ob = std::make_unique<OrderBook<...>>();
 // ─────────────────────────────────────────────────────────────────────────────
-template<uint32_t MaxPrice, uint32_t ScaleFactor, uint32_t PoolCap = 1'000'000>
-class OrderBook : public OrderBookBase<OrderBook<MaxPrice, ScaleFactor, PoolCap>> {
-    using Base = OrderBookBase<OrderBook>;
+template<uint32_t MaxPrice, uint32_t ScaleFactor, uint32_t PoolCap = 1'000'000,
+         class Meta = NoMeta>
+class OrderBook : public OrderBookBase<OrderBook<MaxPrice, ScaleFactor, PoolCap, Meta>, Meta> {
+    using Base = OrderBookBase<OrderBook, Meta>;
     friend Base;   // grants Base access to private bids_, asks_, pool_
 
 public:
@@ -439,7 +484,7 @@ public:
     };
 
     // ── Constructor ───────────────────────────────────────────────────────────
-    OrderBook() { this->bestAsk_ = MaxPriceTick + 1; }
+    OrderBook() { this->bestAsk_ = MaxPriceTick + 1; this->initMeta(); }
 
     // ── Static metadata ───────────────────────────────────────────────────────
     static constexpr uint32_t scaleFactor()  { return ScaleFactor; }
@@ -467,8 +512,9 @@ private:
 //  One heap allocation is made in the constructor; no further allocations
 //  during order matching.  The public API is identical to OrderBook<>.
 // ─────────────────────────────────────────────────────────────────────────────
-class DynamicOrderBook : public OrderBookBase<DynamicOrderBook> {
-    using Base = OrderBookBase<DynamicOrderBook>;
+template<class Meta = NoMeta>
+class BasicDynamicOrderBook : public OrderBookBase<BasicDynamicOrderBook<Meta>, Meta> {
+    using Base = OrderBookBase<BasicDynamicOrderBook, Meta>;
     friend Base;   // grants Base access to private bids_, asks_, pool_
 
 public:
@@ -478,14 +524,14 @@ public:
     //  maxPrice    – ceiling price value (pre-scale), e.g. 2500
     //  scaleFactor – double × scaleFactor → integer tick, e.g. 100
     //  poolCap     – max simultaneous live orders
-    DynamicOrderBook(uint32_t maxPrice, uint32_t scaleFactor, uint32_t poolCap = 1'000'000)
+    BasicDynamicOrderBook(uint32_t maxPrice, uint32_t scaleFactor, uint32_t poolCap = 1'000'000)
     : scaleFactor_(scaleFactor)
     , maxPriceTick_(computeMaxTick(maxPrice, scaleFactor))
     , poolCap_(poolCap)
     , bids_(maxPriceTick_ + 1)
     , asks_(maxPriceTick_ + 1)
     , pool_(poolCap)
-    { this->bestAsk_ = maxPriceTick_ + 1; }
+    { this->bestAsk_ = maxPriceTick_ + 1; this->initMeta(); }
 
     // ── Runtime metadata ──────────────────────────────────────────────────────
     uint32_t scaleFactor()  const { return scaleFactor_; }
@@ -511,3 +557,5 @@ private:
         return static_cast<PTick>(t);
     }
 };
+
+using DynamicOrderBook = BasicDynamicOrderBook<>;

@@ -56,3 +56,6 @@ CMakeUserPresets.json
 .vscode
 
 testorderbook
+
+.idea/
+build/
